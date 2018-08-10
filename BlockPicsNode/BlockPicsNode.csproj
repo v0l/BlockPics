@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="hashstream.bitcoin-lib">
+      <HintPath>..\..\..\..\Documents\GitHub\bitcoin-lib\hashstream.bitcoin-lib\bin\Debug\netcoreapp2.0\hashstream.bitcoin-lib.dll</HintPath>
+    </Reference>
+    <Reference Include="hashstream.bitcoin-node">
+      <HintPath>..\..\..\..\Documents\GitHub\bitcoin-lib\hashstream.bitcoin-node\bin\Debug\netcoreapp2.0\hashstream.bitcoin-node.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
