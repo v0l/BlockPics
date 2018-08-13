@@ -2,34 +2,48 @@
 using hashstream.bitcoin_lib.BlockChain;
 using NetMQ;
 using NetMQ.Sockets;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
 namespace BlockPics
 {
+    internal class Config
+    {
+        public string MastodonHost { get; set; }
+        public string MastodonToken { get; set; }
+
+        public string BitcoinAverageSecret { get; set; }
+        public string BitcoinAveragePublicKey { get; set; }
+    }
+
     class Program
     {
+        private static Config Config { get; set; }
+
         static bool IsRunning { get; set; } = true;
 
         static BufferBlock<Block> BlockStream { get; set; } = new BufferBlock<Block>(); //The REAL BlockStream!
 
         static Task Main(string[] args)
         {
-            return SendPics(args[0], args[1]);
+            return SendPics();
         }
 
-        static async Task SendPics(string host, string token)
+        static async Task SendPics()
         {
-            var authClient = new Mastodot.MastodonClient(host, token);
-            var acc = await authClient.GetCurrentAccount();
-
-            Console.WriteLine($"Logged into: {acc.FullUserName}");
+            Console.WriteLine("Loading config..");
+            Config = JsonConvert.DeserializeObject<Config>(await File.ReadAllTextAsync("config.json"));
 
             Console.WriteLine($"Starting ZMQ thread...");
             var zqt = new Thread(new ThreadStart(ReadBlocks));
@@ -58,14 +72,17 @@ namespace BlockPics
 
                 fp.WaitForExit();
 
-                try
+                var btc = block.Txns.Sum(a => a.TxOut.Sum(b => b.Value * 1e-8));
+                var btcusd = await GetBTCPrice();
+                var status = $"#Bitcoin tip updated! {block_hash} ({(block_data.Length / 1000d).ToString("#,##0.00")} kB with {block.TxnCount.Value.ToString("#,###")} txns, moving {btc.ToString("#,##0.0000 BTC")}, worth ${(btc * btcusd.last).ToString("#,##0.00")})";
+
+                var media = await UploadImage($"{block_hash}.png");
+                if (media != null)
                 {
-                    var media = await authClient.UploadMedia($"{block_hash}.png");
-                    await authClient.PostNewStatus($"#Bitcoin tip updated! {block_hash} ({block.TxnCount.Value.ToString("#,###")} txns, moving {block.Txns.Sum(a => a.TxOut.Sum(b => b.Value / 1e-8)).ToString("#,##0.0000 BTC")})", null, new List<int>() { media.Id });
-                    
-                    Console.WriteLine($"Block posted! {media.Url}");
+                    var post = await PostStatus(status, new List<string> { media.id });
+
+                    Console.WriteLine($"Block posted! {post.url}");
                 }
-                catch { }
             }
             
         }
@@ -99,5 +116,113 @@ namespace BlockPics
                 }
             }
         }
+
+        static async Task<MediaAttachment> UploadImage(string filename)
+        {
+            try
+            {
+                var req = (HttpWebRequest)WebRequest.Create($"https://{Config.MastodonHost}/api/v1/media");
+                req.Headers.Add(HttpRequestHeader.Authorization, $"Bearer {Config.MastodonToken}");
+                req.Method = "POST";
+
+                var data = new MultipartFormDataContent();
+                data.Add(new ByteArrayContent(await File.ReadAllBytesAsync(filename)), "file", filename);
+
+                req.ContentType = data.Headers.ContentType.ToString();
+                req.ContentLength = data.Headers.ContentLength.Value;
+
+                using (var ss = await req.GetRequestStreamAsync())
+                {
+                    await data.CopyToAsync(ss);
+                }
+
+                var rsp = (HttpWebResponse)await req.GetResponseAsync();
+                if (rsp.StatusCode == HttpStatusCode.OK)
+                {
+                    using(var sr = new StreamReader(rsp.GetResponseStream()))
+                    {
+                        return JsonConvert.DeserializeObject<MediaAttachment>(await sr.ReadToEndAsync());
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+
+            return default;
+        }
+
+        static async Task<Status> PostStatus(string status, List<string> Media)
+        {
+            try
+            {
+                var req = (HttpWebRequest)WebRequest.Create($"https://{Config.MastodonHost}/api/v1/statuses");
+                req.Headers.Add(HttpRequestHeader.Authorization, $"Bearer {Config.MastodonToken}");
+                req.Method = "POST";
+                req.ContentType = "application/x-www-form-urlencoded";
+
+                var data = $"status={status}&media_ids[]={string.Join("&media_ids[]=", Media)}";
+                using (var ss = await req.GetRequestStreamAsync())
+                {
+                    var fd = Encoding.UTF8.GetBytes(data);
+                    await ss.WriteAsync(fd);
+                    req.ContentLength = fd.Length;
+                }
+
+                var rsp = (HttpWebResponse)await req.GetResponseAsync();
+                if (rsp.StatusCode == HttpStatusCode.OK)
+                {
+                    using (var sr = new StreamReader(rsp.GetResponseStream()))
+                    {
+                        return JsonConvert.DeserializeObject<Status>(await sr.ReadToEndAsync());
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+
+            return default;
+        }
+
+        static string GetBitcoinAverageSig()
+        {
+            var pl = $"{DateTimeOffset.Now.ToUnixTimeSeconds()}.{Config.BitcoinAveragePublicKey}";
+            byte[] dgst = null;
+            using (var hmac = new HMACSHA256(Encoding.ASCII.GetBytes(Config.BitcoinAverageSecret)))
+            {
+                var pld = Encoding.ASCII.GetBytes(pl);
+                dgst = hmac.ComputeHash(pld, 0, pld.Length);
+            }
+
+            return $"{pl}.{BitConverter.ToString(dgst).Replace("-", string.Empty).ToLower()}";
+        }
+
+        static async Task<Ticker> GetBTCPrice()
+        {
+            try
+            {
+                var req = (HttpWebRequest)WebRequest.Create("https://apiv2.bitcoinaverage.com/indices/global/ticker/BTCUSD");
+                req.Headers.Add("X-signature", GetBitcoinAverageSig());
+
+                var rsp = (HttpWebResponse)await req.GetResponseAsync();
+                if (rsp.StatusCode == HttpStatusCode.OK)
+                {
+                    using (var sr = new StreamReader(rsp.GetResponseStream()))
+                    {
+                        return JsonConvert.DeserializeObject<Ticker>(await sr.ReadToEndAsync());
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+
+            return default;
+        }
     }
+
 }
