@@ -35,6 +35,12 @@ namespace BlockPics
 
         static BufferBlock<Block> BlockStream { get; set; } = new BufferBlock<Block>(); //The REAL BlockStream!
 
+        static dynamic Pools { get; set; }
+
+        static Dictionary<string, PoolInfo> CoinbaseTags => Pools.coinbase_tags.ToObject<Dictionary<string, PoolInfo>>();
+
+        static Dictionary<string, PoolInfo> CoinbaseAddress => Pools.payout_addresses.ToObject<Dictionary<string, PoolInfo>>();
+
         static Task Main(string[] args)
         {
             return SendPics();
@@ -47,6 +53,9 @@ namespace BlockPics
             {
                 Config = JsonConvert.DeserializeObject<Config>(await sr.ReadToEndAsync());
             }
+
+            Console.WriteLine($"Loading pools..");
+            Pools = await GetPools();
 
             Console.WriteLine($"Starting ZMQ thread...");
             var zqt = new Thread(new ThreadStart(ReadBlocks));
@@ -76,8 +85,11 @@ namespace BlockPics
                 fp.WaitForExit();
 
                 var btc = block.Txns.Sum(a => a.TxOut.Sum(b => b.Value * 1e-8));
+                var segwit = block.Txns.Count(a => a.HasWitness());
+
                 var btcusd = await GetBTCPrice();
-                var status = $"#Bitcoin tip updated! {block_hash} ({(block_data.Length / 1000d).ToString("#,##0.00")} kB with {block.TxnCount.Value.ToString("#,###")} txns, moving ₿{btc.ToString("#,##0.00")}, worth ${(btc * btcusd.last).ToString("#,##0.00")})";
+                var pool = GetPoolInfo(block);
+                var status = $"#Bitcoin tip updated{(pool != null ? $" by {pool.name}" : string.Empty)}! {block_hash} ({(block_data.Length / 1000d).ToString("#,##0.00")} kB with {block.TxnCount.Value.ToString("#,###")} txns [{(100d * (segwit / (double)block.TxnCount)).ToString("0.00")}% segwit], moving ₿{btc.ToString("#,##0.00")}, worth ${(btc * btcusd.last).ToString("#,##0.00")})";
 
                 var media = await UploadImage($"{block_hash}.png");
                 if (media != null)
@@ -118,6 +130,32 @@ namespace BlockPics
                     BlockStream.Post(bp);
                 }
             }
+        }
+
+        static PoolInfo GetPoolInfo(Block b)
+        {
+            var cbd = Encoding.UTF8.GetString(b.Txns[0].TxIn[0].Script.ScriptBytes);
+            var cba = b.Txns[0].TxOut[0].GetAddress().ToString();
+
+            //try coinbase tags first
+            foreach(var ct in CoinbaseTags)
+            {
+                if (cbd.Contains(ct.Key))
+                {
+                    return ct.Value;
+                }
+            }
+
+            //try payout address
+            foreach(var ct in CoinbaseAddress)
+            {
+                if(ct.Key == cba)
+                {
+                    return ct.Value;
+                }
+            }
+
+            return default;
         }
 
         static async Task<MediaAttachment> UploadImage(string filename)
@@ -165,12 +203,13 @@ namespace BlockPics
                 req.Method = "POST";
                 req.ContentType = "application/x-www-form-urlencoded";
 
-                var data = $"status={status}&media_ids[]={string.Join("&media_ids[]=", Media)}";
+                var data = $"status={Uri.EscapeDataString(status)}&media_ids[]={string.Join("&media_ids[]=", Media)}";
                 using (var ss = await req.GetRequestStreamAsync())
                 {
                     var fd = Encoding.UTF8.GetBytes(data);
-                    await ss.WriteAsync(fd, 0, fd.Length);
                     req.ContentLength = fd.Length;
+
+                    await ss.WriteAsync(fd, 0, fd.Length);
                 }
 
                 var rsp = (HttpWebResponse)await req.GetResponseAsync();
@@ -226,5 +265,33 @@ namespace BlockPics
 
             return default;
         }
+
+        static async Task<dynamic> GetPools()
+        {
+            try
+            {
+                var req = (HttpWebRequest)WebRequest.Create("https://raw.githubusercontent.com/hashstream/pools/master/pools.json");
+                var rsp = (HttpWebResponse)await req.GetResponseAsync();
+                if (rsp.StatusCode == HttpStatusCode.OK)
+                {
+                    using (var sr = new StreamReader(rsp.GetResponseStream()))
+                    {
+                        return JsonConvert.DeserializeObject<dynamic>(await sr.ReadToEndAsync());
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+
+            return default;
+        }
+    }
+
+    internal class PoolInfo
+    {
+        public string name { get; set; }
+        public string link { get; set; }
     }
 }
