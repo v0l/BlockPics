@@ -43,7 +43,10 @@ namespace BlockPics
         static async Task SendPics()
         {
             Console.WriteLine("Loading config..");
-            Config = JsonConvert.DeserializeObject<Config>(await File.ReadAllTextAsync("config.json"));
+            using (var sr = new StreamReader("config.json"))
+            {
+                Config = JsonConvert.DeserializeObject<Config>(await sr.ReadToEndAsync());
+            }
 
             Console.WriteLine($"Starting ZMQ thread...");
             var zqt = new Thread(new ThreadStart(ReadBlocks));
@@ -63,7 +66,7 @@ namespace BlockPics
 
                 Console.WriteLine($"Adding {padding} bytes padding..");
 
-                await File.WriteAllBytesAsync("block.dat", block_data.Concat(new byte[padding]));
+                File.WriteAllBytes("block.dat", block_data.Concat(new byte[padding]));
 
                 igen.Arguments = $"-y -f rawvideo -pix_fmt rgb24 -s {sres}x{sres} -i block.dat -vframes 1 {block_hash}.png";
 
@@ -126,7 +129,7 @@ namespace BlockPics
                 req.Method = "POST";
 
                 var data = new MultipartFormDataContent();
-                data.Add(new ByteArrayContent(await File.ReadAllBytesAsync(filename)), "file", filename);
+                data.Add(new ByteArrayContent(File.ReadAllBytes(filename)), "file", filename);
 
                 req.ContentType = data.Headers.ContentType.ToString();
                 req.ContentLength = data.Headers.ContentLength.Value;
@@ -166,7 +169,7 @@ namespace BlockPics
                 using (var ss = await req.GetRequestStreamAsync())
                 {
                     var fd = Encoding.UTF8.GetBytes(data);
-                    await ss.WriteAsync(fd);
+                    await ss.WriteAsync(fd, 0, fd.Length);
                     req.ContentLength = fd.Length;
                 }
 
@@ -224,5 +227,4 @@ namespace BlockPics
             return default;
         }
     }
-
 }

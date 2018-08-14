@@ -63,7 +63,7 @@ namespace BlockPicsNode
                 {
                     var line = await sr.ReadLineAsync();
                     //var line = "event: update";
-                    if (line.StartsWith(':') || line == string.Empty)
+                    if (line.StartsWith(":") || line == string.Empty)
                     {
                         continue;
                     }
@@ -92,11 +92,11 @@ namespace BlockPicsNode
                                 igen.Arguments = $"-i - -f rawvideo -pix_fmt rgb24 -";
 
                                 var fp = Process.Start(igen);
-                                await fp.StandardInput.BaseStream.WriteAsync(img_data);
+                                await fp.StandardInput.BaseStream.WriteAsync(img_data, 0, img_data.Length);
                                 fp.StandardInput.Close();
 
                                 var block_buf = new byte[img_data.Length];
-                                var rlen = await fp.StandardOutput.BaseStream.ReadAsync(block_buf);
+                                var rlen = await fp.StandardOutput.BaseStream.ReadAsync(block_buf, 0, block_buf.Length);
                                 fp.StandardOutput.Close();
 
                                 fp.WaitForExit();
