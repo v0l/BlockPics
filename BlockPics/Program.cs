@@ -74,7 +74,7 @@ namespace BlockPics
 
                 var btc = block.Txns.Sum(a => a.TxOut.Sum(b => b.Value * 1e-8));
                 var btcusd = await GetBTCPrice();
-                var status = $"#Bitcoin tip updated! {block_hash} ({(block_data.Length / 1000d).ToString("#,##0.00")} kB with {block.TxnCount.Value.ToString("#,###")} txns, moving {btc.ToString("#,##0.0000 BTC")}, worth ${(btc * btcusd.last).ToString("#,##0.00")})";
+                var status = $"#Bitcoin tip updated! {block_hash} ({(block_data.Length / 1000d).ToString("#,##0.00")} kB with {block.TxnCount.Value.ToString("#,###")} txns, moving ₿{btc.ToString("#,##0.00")}, worth ${(btc * btcusd.last).ToString("#,##0.00")})";
 
                 var media = await UploadImage($"{block_hash}.png");
                 if (media != null)
