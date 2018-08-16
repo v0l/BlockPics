@@ -3,12 +3,13 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>netcoreapp2.1;net461</TargetFrameworks>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
+  <ItemGroup Condition="'$(TargetFramework)' == 'net461'">
+    <Reference Include="Microsoft.CSharp"/>
+  </ItemGroup>
+  
   <ItemGroup>
     <PackageReference Include="hashstream.bitcoin-lib" Version="1.0.0-CI00004" />
     <PackageReference Include="NetMQ" Version="4.0.0.1" />

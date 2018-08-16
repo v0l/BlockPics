@@ -135,7 +135,7 @@ namespace BlockPics
         static PoolInfo GetPoolInfo(Block b)
         {
             var cbd = Encoding.UTF8.GetString(b.Txns[0].TxIn[0].Script.ScriptBytes);
-            var cba = b.Txns[0].TxOut[0].GetAddress().ToString();
+            var cba = b.Txns[0].TxOut.FirstOrDefault(a => a.Value != 0).GetAddress().ToString();
 
             //try coinbase tags first
             foreach(var ct in CoinbaseTags)

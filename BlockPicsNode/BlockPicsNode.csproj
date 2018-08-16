@@ -3,8 +3,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>netcoreapp2.1;net461</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
-
+  
   <ItemGroup>
     <PackageReference Include="hashstream.bitcoin-node" Version="1.0.0-CI00004" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
