@@ -102,9 +102,13 @@ namespace BlockPicsNode
                                 fp.WaitForExit();
 
                                 var block_parsed = new Block();
+#if NETCOREAPP2_1
+                                block_parsed.ReadFromPayload(block_buf);
+#else
                                 block_parsed.ReadFromPayload(block_buf, 0);
+#endif
 
-                                if(block_parsed != null)
+                                if (block_parsed != null)
                                 {
                                     Console.WriteLine($"Tip updated: {block_parsed.Hash}");
 

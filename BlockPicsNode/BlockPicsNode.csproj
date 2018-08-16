@@ -11,7 +11,7 @@
   </PropertyGroup>
   
   <ItemGroup>
-    <PackageReference Include="hashstream.bitcoin-node" Version="1.0.0-CI00004" />
+    <PackageReference Include="hashstream.bitcoin-node" Version="1.0.0-CI00005" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
   </ItemGroup>
 

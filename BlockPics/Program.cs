@@ -118,14 +118,22 @@ namespace BlockPics
                 if (tag == "rawtx")
                 {
                     var tx = new Tx();
+#if NETCOREAPP2_1
+                    tx.ReadFromPayload(msg_data);
+#else
                     tx.ReadFromPayload(msg_data, 0);
+#endif
 
                     Console.WriteLine($"Got new tx! {tx.TxHash}");
                 }
                 else if (tag == "rawblock")
                 {
                     var bp = new Block();
+#if NETCOREAPP2_1
+                    bp.ReadFromPayload(msg_data);
+#else
                     bp.ReadFromPayload(msg_data, 0);
+#endif
 
                     BlockStream.Post(bp);
                 }
