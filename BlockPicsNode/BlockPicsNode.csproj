@@ -5,6 +5,10 @@
     <TargetFrameworks>netcoreapp2.1;net461</TargetFrameworks>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netcoreapp2.1'">
+    <DefineConstants>NETCOREAPP2_1</DefineConstants>
+  </PropertyGroup>
   
   <ItemGroup>
     <PackageReference Include="hashstream.bitcoin-node" Version="1.0.0-CI00004" />
