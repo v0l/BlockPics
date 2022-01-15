@@ -9,7 +9,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,8 +24,7 @@ namespace BlockPics
         public string MastodonHost { get; set; }
         public string MastodonToken { get; set; }
 
-        public string BitcoinAverageSecret { get; set; }
-        public string BitcoinAveragePublicKey { get; set; }
+        public string CryptocompareKey { get; set; }
     }
 
     class Program
@@ -91,7 +89,7 @@ namespace BlockPics
 
                 var btcusd = await GetBTCPrice();
                 var pool = GetPoolInfo(block);
-                var status = $"#Bitcoin tip updated{(pool != null ? $" by {pool.name}" : string.Empty)}! {block_hash} ({(block_data.Length / 1000d).ToString("#,##0.00")} kB with {block.Transactions.Count.ToString("#,###")} txns [{(100d * (segwit / (double)block.Transactions.Count)).ToString("0.00")}% segwit], moving ₿{btc.ToString("#,##0.00")}, worth ${(btc * btcusd.last).ToString("#,##0.00")})";
+                var status = $"#Bitcoin tip updated{(pool != null ? $" by {pool.name}" : string.Empty)}! {block_hash} ({(block_data.Length / 1000d).ToString("#,##0.00")} kB with {block.Transactions.Count.ToString("#,###")} txns, moving ₿{btc.ToString("#,##0")}, worth ${(btc * btcusd.USD).ToString("#,##0")})";
 
                 var media = await UploadImage($"{block_hash}.png");
                 if (media != null)
@@ -228,25 +226,12 @@ namespace BlockPics
             return default;
         }
 
-        static string GetBitcoinAverageSig()
-        {
-            var pl = $"{DateTimeOffset.Now.ToUnixTimeSeconds()}.{Config.BitcoinAveragePublicKey}";
-            byte[] dgst = null;
-            using (var hmac = new HMACSHA256(Encoding.ASCII.GetBytes(Config.BitcoinAverageSecret)))
-            {
-                var pld = Encoding.ASCII.GetBytes(pl);
-                dgst = hmac.ComputeHash(pld, 0, pld.Length);
-            }
-
-            return $"{pl}.{BitConverter.ToString(dgst).Replace("-", string.Empty).ToLower()}";
-        }
-
         static async Task<Ticker> GetBTCPrice()
         {
             try
             {
-                var req = (HttpWebRequest)WebRequest.Create("https://apiv2.bitcoinaverage.com/indices/global/ticker/BTCUSD");
-                req.Headers.Add("X-signature", GetBitcoinAverageSig());
+                var req = (HttpWebRequest)WebRequest.Create("https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD");
+                req.Headers.Add("Authorization", $"Apikey {Config.CryptocompareKey}");
 
                 var rsp = (HttpWebResponse)await req.GetResponseAsync();
                 if (rsp.StatusCode == HttpStatusCode.OK)

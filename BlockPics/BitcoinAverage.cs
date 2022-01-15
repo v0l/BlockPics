@@ -40,17 +40,6 @@ namespace BlockPics
 
     public class Ticker
     {
-        public double ask { get; set; }
-        public double bid { get; set; }
-        public double last { get; set; }
-        public double high { get; set; }
-        public double low { get; set; }
-        public Open open { get; set; }
-        public Averages averages { get; set; }
-        public double volume { get; set; }
-        public Changes changes { get; set; }
-        public double volume_percent { get; set; }
-        public int timestamp { get; set; }
-        public string display_timestamp { get; set; }
+        public double USD { get; set; }
     }
 }
