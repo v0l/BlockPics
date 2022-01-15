@@ -109,6 +109,7 @@ namespace BlockPics
             //zmq.Subscribe("rawtx");
             //zmq.SubscribeToAnyTopic();
 
+            Console.WriteLine("Waiting for blocks..");
             while (IsRunning)
             {
                 var msg = zmq.ReceiveMultipartMessage();
