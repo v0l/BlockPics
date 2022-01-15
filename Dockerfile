@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build-env
 WORKDIR /app
 
 #install ffmpeg
-RUN apt-get install -y ffmpeg
+RUN apt update && apt install -y ffmpeg
 
 # Copy everything else and build
 COPY . .
