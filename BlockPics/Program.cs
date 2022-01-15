@@ -1,5 +1,4 @@
-﻿using hashstream.bitcoin_lib;
-using hashstream.bitcoin_lib.BlockChain;
+﻿using NBitcoin;
 using NetMQ;
 using NetMQ.Sockets;
 using Newtonsoft.Json;
@@ -20,6 +19,9 @@ namespace BlockPics
 {
     internal class Config
     {
+        public string BitcoinRawBlocks { get; set; }
+        public string BitcoinRawTxn { get; set; }
+
         public string MastodonHost { get; set; }
         public string MastodonToken { get; set; }
 
@@ -65,8 +67,8 @@ namespace BlockPics
             while (IsRunning)
             {
                 var block = await BlockStream.ReceiveAsync();
-                var block_hash = block.Hash.ToString();
-                var block_data = block.ToArray();
+                var block_hash = block.Header.GetHash().ToString();
+                var block_data = block.ToBytes();
 
                 var pixels = block_data.Length / 3;
 
@@ -75,7 +77,7 @@ namespace BlockPics
 
                 Console.WriteLine($"Adding {padding} bytes padding..");
 
-                File.WriteAllBytes("block.dat", block_data.Concat(new byte[padding]));
+                File.WriteAllBytes("block.dat", block_data.Concat(new byte[padding]).ToArray());
 
                 igen.Arguments = $"-y -f rawvideo -pix_fmt rgb24 -s {sres}x{sres} -i block.dat -vframes 1 {block_hash}.png";
 
@@ -84,12 +86,12 @@ namespace BlockPics
 
                 fp.WaitForExit();
 
-                var btc = block.Txns.Sum(a => a.TxOut.Sum(b => b.Value * 1e-8));
-                var segwit = block.Txns.Count(a => a.HasWitness());
+                var btc = block.Transactions.Sum(a => a.Outputs.Sum(b => b.Value.Satoshi * 1e-8));
+                var segwit = block.Transactions.Count(a => a.HasWitness);
 
                 var btcusd = await GetBTCPrice();
                 var pool = GetPoolInfo(block);
-                var status = $"#Bitcoin tip updated{(pool != null ? $" by {pool.name}" : string.Empty)}! {block_hash} ({(block_data.Length / 1000d).ToString("#,##0.00")} kB with {block.TxnCount.Value.ToString("#,###")} txns [{(100d * (segwit / (double)block.TxnCount)).ToString("0.00")}% segwit], moving ₿{btc.ToString("#,##0.00")}, worth ${(btc * btcusd.last).ToString("#,##0.00")})";
+                var status = $"#Bitcoin tip updated{(pool != null ? $" by {pool.name}" : string.Empty)}! {block_hash} ({(block_data.Length / 1000d).ToString("#,##0.00")} kB with {block.Transactions.Count.ToString("#,###")} txns [{(100d * (segwit / (double)block.Transactions.Count)).ToString("0.00")}% segwit], moving ₿{btc.ToString("#,##0.00")}, worth ${(btc * btcusd.last).ToString("#,##0.00")})";
 
                 var media = await UploadImage($"{block_hash}.png");
                 if (media != null)
@@ -99,12 +101,12 @@ namespace BlockPics
                     Console.WriteLine($"Block posted! {post.url}");
                 }
             }
-            
+
         }
 
         static void ReadBlocks()
         {
-            var zmq = new SubscriberSocket("tcp://127.0.0.1:18333");
+            var zmq = new SubscriberSocket(Config.BitcoinRawBlocks);
             zmq.Subscribe("rawblock");
             //zmq.Subscribe("rawtx");
             //zmq.SubscribeToAnyTopic();
@@ -117,24 +119,12 @@ namespace BlockPics
 
                 if (tag == "rawtx")
                 {
-                    var tx = new Tx();
-#if NETCOREAPP2_1
-                    tx.ReadFromPayload(msg_data);
-#else
-                    tx.ReadFromPayload(msg_data, 0);
-#endif
-
-                    Console.WriteLine($"Got new tx! {tx.TxHash}");
+                    var tx = Transaction.Load(msg_data, Network.Main);
+                    Console.WriteLine($"Got new tx! {tx}");
                 }
                 else if (tag == "rawblock")
                 {
-                    var bp = new Block();
-#if NETCOREAPP2_1
-                    bp.ReadFromPayload(msg_data);
-#else
-                    bp.ReadFromPayload(msg_data, 0);
-#endif
-
+                    var bp = Block.Load(msg_data, Consensus.Main);
                     BlockStream.Post(bp);
                 }
             }
@@ -142,11 +132,12 @@ namespace BlockPics
 
         static PoolInfo GetPoolInfo(Block b)
         {
-            var cbd = Encoding.UTF8.GetString(b.Txns[0].TxIn[0].Script.ScriptBytes);
-            var cba = b.Txns[0].TxOut.FirstOrDefault(a => a.Value != 0).GetAddress().ToString();
+            var cbd = Encoding.UTF8.GetString(b.Transactions[0].Inputs[0].ScriptSig.ToBytes());
+            var cba = b.Transactions[0].Outputs.FirstOrDefault(a => a.Value != Money.Zero)
+                .ScriptPubKey.GetDestinationAddress(Network.Main).ToString();
 
             //try coinbase tags first
-            foreach(var ct in CoinbaseTags)
+            foreach (var ct in CoinbaseTags)
             {
                 if (cbd.Contains(ct.Key))
                 {
@@ -155,9 +146,9 @@ namespace BlockPics
             }
 
             //try payout address
-            foreach(var ct in CoinbaseAddress)
+            foreach (var ct in CoinbaseAddress)
             {
-                if(ct.Key == cba)
+                if (ct.Key == cba)
                 {
                     return ct.Value;
                 }
@@ -188,7 +179,7 @@ namespace BlockPics
                 var rsp = (HttpWebResponse)await req.GetResponseAsync();
                 if (rsp.StatusCode == HttpStatusCode.OK)
                 {
-                    using(var sr = new StreamReader(rsp.GetResponseStream()))
+                    using (var sr = new StreamReader(rsp.GetResponseStream()))
                     {
                         return JsonConvert.DeserializeObject<MediaAttachment>(await sr.ReadToEndAsync());
                     }

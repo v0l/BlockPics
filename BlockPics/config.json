@@ -1,0 +1,7 @@
+﻿{
+  "BitcoinRawBlocks": "zmq://127.0.0.1:10833",
+  "MastodonHost": "bitcoinhackers.org",
+  "MastodonToken": "",
+  "BitcoinAverageSecret": "",
+  "BitcoinAveragePublicKey": ""
+}
