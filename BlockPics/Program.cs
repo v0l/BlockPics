@@ -89,7 +89,7 @@ namespace BlockPics
 
                 var btcusd = await GetBTCPrice();
                 var pool = GetPoolInfo(block);
-                var status = $"#Bitcoin tip updated{(pool != null ? $" by {pool.name}" : string.Empty)}! {block_hash} ({(block_data.Length / 1000d).ToString("#,##0.00")} kB with {block.Transactions.Count.ToString("#,###")} txns, moving ₿{btc.ToString("#,##0")}, worth ${(btc * btcusd.USD).ToString("#,##0")})";
+                var status = $"Bitcoin tip updated{(pool != null ? $" by {pool.name}" : string.Empty)}! {block_hash} ({(block_data.Length / 1000d).ToString("#,##0.00")} kB with {block.Transactions.Count.ToString("#,###")} txns, moving ₿{btc.ToString("#,##0")}, worth ${(btc * btcusd.USD).ToString("#,##0")})";
 
                 var media = await UploadImage($"{block_hash}.png");
                 if (media != null)
